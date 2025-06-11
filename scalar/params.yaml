@@ -1,0 +1,51 @@
+# Identification
+run_name:     "no_scaling"     # short label for this run
+output_dir:   "runs"             # parent folder for all experiments
+
+# Data
+processed_dir: "processed_data"   # directory containing Y.csv, meta.csv, emb_scaler.pkl
+emb_path:      "embeddings.npy"   # your raw embeddings
+fname_path:    "filenames.npy"    # corresponding filenames
+
+# Loader
+batch_size: 512
+val_frac:   0.1
+seed:       42
+
+
+
+# Gradient clipping
+grad_clip:      5.0 
+
+# Model / training hyperparams
+n_blocks:        8
+internal_size:   256
+layers_per_block: 3
+coupling_type:   "rational_quadratic"
+permute_soft:    False
+
+
+# Training
+n_epochs:       2000
+save_interval:  20
+# Optimizer
+lr:             5e-4
+betas:          [0.9, 0.999]
+eps:            1e-6
+weight_decay:   0.0
+
+
+# Scheduler
+lr_scheduler:      "reduce_on_plateau"  # options: "step", "reduce_on_plateau", "one_cycle"
+lr_decay_epochs:   50                  # for "step"
+lr_decay_factor:   0.5                 # for "step"
+reduce_factor:     0.8                 # for "reduce_on_plateau"
+reduce_patience:   20                  # for "reduce_on_plateau"
+reduce_threshold:  1e-4                # for "reduce_on_plateau"
+max_lr:            5e-3                # for "one_cycle"
+
+# checkpointing
+checkpoint: "runs/20250530_110317_no_scaling/model_last.pt"
+
+# plotting
+kde_bandwidth: 0.5
