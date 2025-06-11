@@ -70,7 +70,6 @@ scalar/
 ├── 3.uncertainities.png           # Uncertainty vs error scatter
 ├── 4.cross_correlations.ipynb     # Notebook for cross-correlation analysis
 ├── 4.cross_correlations.png        # Cross-correlation heatmap
-├── params.yaml                 # YAML file with model & training settings
 ├── processed_data/             # Generated: scaled X.csv, Y.csv, meta.csv, scalers
 └── runs/                       # Output directory for checkpoints & logs
 ```
@@ -103,7 +102,7 @@ python data_filter.py \
 ```python
 from data_loader import get_loaders
 train_loader, val_loader = get_loaders(
-    processed_dir="processed_data", 
+    processed_dir="processed_data",  
     batch_size=512,
     val_frac=0.1,
 )
@@ -114,81 +113,113 @@ train_loader, val_loader = get_loaders(
 
 ### 3. Model Architecture
 
-Defined in **`model.py`**:
+The core of the scalar pipeline is the **cINN** defined in `model.py`. Key components:
 
-* **`VBLinear`**: Bayesian linear layer with local reparameterization and optional MAP inference.
-* **`Subnet`**: Configurable fully connected or Bayesian subnet for coupling blocks.
-* **`LogTransformation`**: Simple invertible log/exp transform module.
-* **`RationalQuadraticSplineBlock`**: Invertible coupling block using rational-quadratic splines.
-* **`CINN`**: Builds a sequence of coupling blocks conditioned on observables:
+* **`VBLinear`**: A Bayesian linear layer using the local reparameterization trick for weight uncertainty. Supports MAP inference to use only weight means at test time.
+* **`Subnet`**: Constructs customizable fully-connected subnets (optionally Bayesian) that predict coupling parameters.
+* **`LogTransformation`**: An invertible module applying `log(x + α)` in the forward pass and exp in the reverse, handling positive-valued data.
+* **`RationalQuadraticSplineBlock`**: Implements a coupling transform using rational‐quadratic splines:
 
-  * Supports `affine` or `rational_quadratic` coupling (via `params.yaml`).
-  * Optional Bayesian layers with KL regularization.
-  * Methods for forward (`log_prob`), reverse sampling (`sample`), and MAP.
+  * **Bins & heights** are learned via the subnet; tails are linear outside bounds.
+  * **Monotonic and invertible** with tractable Jacobian determinants.
+  * **Controls** expressivity via the number of bins (`num_bins` in `params.yaml`).
+* **`CINN`**: Chains multiple blocks into a GraphINN:
 
-*Essential hyperparameters* (see `params.yaml`): number of blocks (`n_blocks`), bins (`num_bins`), hidden sizes, Bayesian flags, learning rate.
+  1. **InputNode** for targets
+  2. **ConditionNode** for observables
+  3. Alternating **coupling blocks** and **permutations**
+  4. **OutputNode** yields latent variables `z`
+
+In the forward pass: `x → z` with log‐likelihood `log p(z) + log|det J|`. In reverse: sample `z ~ N(0,I)` to generate `x` conditioned on observables.
+
+*Important hyperparameters* in `params.yaml`: number of blocks (`n_blocks`), coupling type (`affine` or `rational_quadratic`), bins (`num_bins`), hidden sizes, Bayesian flags.
 
 ### 4. Training
 
-Run the CLI (**`main.py`**):
+Use `main.py` to kick off training:
 
 ```bash
 python main.py params.yaml
 ```
 
-* Loads YAML config, sets up an output folder under `runs/` with timestamp.
-* Initializes `Trainer`, which:
+* **`Trainer`** (in `trainer.py`) loads data, builds the model on CPU/GPU, and sets up an optimizer (AdamW) with a scheduler (`one_cycle`, `step`, or `reduce_on_plateau`).
+* At each epoch:
 
-  1. Loads data via `get_loaders`
-  2. Builds and moves `CINN` model to device
-  3. Sets up optimizer + scheduler (supports `one_cycle`, `step`, or `reduce_on_plateau`)
-  4. Executes training epochs: computes NLL loss (`-log_prob`) + KL (if Bayesian)
-  5. Logs train & val losses, learning rates, and checkpointing at intervals
-
-*Checkpoint files* (`model.pt`, `model_20.pt`, ..., `model_last.pt`) are saved via the `Documenter` utility in `runs/<timestamp>_<run_name>/`.
+  1. **Compute** negative log‑likelihood (`-mean log_prob`) and KL term for Bayesian layers.
+  2. **Backpropagate**, clip gradients if needed, and update weights.
+  3. **Evaluate** on validation set, logging train/val NLL & KL.
+  4. **Checkpoint** model weights at intervals into `runs/<timestamp>_<run_name>/`.
 
 ### 5. Plotting Results
 
-Use the provided notebooks or call functions in **`plot_utils.py`** to regenerate figures:
+## Generating Figures
 
-1. **Posterior Distribution**
+All plotting scripts assume:
 
-   ![Figure 1](1.posterior_distribution.png)
+* `model.pt` exists in the runs folder and generated after runnig the training. 
+* `processed_data/` contains the pre‑processed CSVs & scalers.
 
-   ```python
-   from plot_utils import posterior_distribution
-   posterior_distribution(
-       model_checkpoint="runs/.../model_last.pt",
-       params_path="params.yaml",
-       processed_dir="processed_data",
-       n_rows=10,
-       n_samples=600
-   )
-   ```
+Run any script inside the jupyter notebook files:
 
-2. **Prediction Performance**
+```bash
+1.posterior_distribution.ipynb       # Fig. 1  prior v posterior grid
+2.prediction_performance.ipynb       # Fig. 2a heat‑maps, Fig. 2b truth v MAP
+3.uncertainities.ipynb               # Fig. 3  calibration
+4.cross_correlation.ipynb            # Fig. 4  pairwise correlations
+```
 
-   * *Heatmap of prior vs posterior bins* (`2.prediction_performance1.png`)
-   * *MAP vs ground truth & error-vs-truth* (`2.prediction_performance2.png`)
+Each script saves a high‑resolution PNG (and commented‑out PDF) in the repo root with intuitive file names:
 
-   ```bash
-   jupyter nbconvert --to notebook --execute 2.prediction_performance.ipynb
-   ```
-
-3. **Uncertainty Analysis**
-
-   ![Figure 3](3.uncertainities.png)
-
-   ```bash
-   python 3.uncertainities.ipynb
-   ```
-
-4. **Cross-Correlations**
-
-   ![Figure 4](4.cross_correlations.png)
-
-   ```bash
-   python 4.cross_correlations.ipynb
-   ```
+```
+posterior_distribution.png
+2.prediction_performance1.png
+2.prediction_performance2.png
+3.uncertainities.png
+4.cross_correlations.png
+```
 
 ---
+
+##  Figure Gallery
+
+=======
+| #  | File                           | Insight                                                                        
+| -- | ------------------------------ | ------------------------------------------------------------------------------ 
+| 1  | 1.posterior\_distribution.png    | Side‑by‑side prior/posterior comparison with MAP + truth per cluster.          
+| 2a | 2.prediction\_performance1.png | Heat‑maps of how posteriors shift relative to prior bins across targets.       
+| 2b | 2.prediction\_performance2.png | MAP accuracy & error distribution as a function of ground‑truth value.         
+| 3  | 3.uncertainities.png           | Checks correlation between predicted σ and actual                              
+| 4  | 4.cross\_correlations.png      | Joint distributions (truth, posterior, MAP) for every target pair.             
+
+### 1  Prior vs Posterior (Figure 1)
+
+![Prior vs Posterior](scalar/1.posterior_distrubution.png)
+*Side‑by‑side KDE curves of the population prior (grey dashed), model posterior (blue), MAP estimate (gold), and ground truth (red) for every cluster and target.*
+
+---
+
+### 2a  Posterior Heat‑maps (Figure 2a)
+
+![Posterior Heat‑maps](scalar/2.prediction_performance1.png)
+*2‑D heat‑maps of prior bin → posterior bin counts, overlaid with median (solid) and 10th/90th percentile (dashed) lines for each target.*
+
+---
+
+### 2b  MAP & Error Trends (Figure 2b)
+
+![MAP & Error Trends](scalar/2.prediction_performance2.png)
+*Top row: Ground‑truth vs MAP predictions.  Bottom row: Absolute error vs truth (symlog scale) with 16th/84th percentile bands.*
+
+---
+
+### 3  Uncertainty Calibration (Figure 3)
+
+![Uncertainty Calibration](scalar/3.uncertainities.png)
+*Scatter of |MAP − truth| versus posterior σ, including Gaussian reference curves and binned 68th/95th percentile error lines.*
+
+---
+
+### 4  Cross‑correlations (Figure 4)
+
+![Cross‑correlations](scalar/4.cross_correlations.png)
+*Staircase grid of pairwise scatter plots showing joint distributions of truth (red), posterior samples (light‑blue), and MAP predictions (mustard) for every target pair.*
