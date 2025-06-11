@@ -152,7 +152,7 @@ python main.py params.yaml
 
 ### 5. Plotting Results
 
-## Generating Figures
+#### Generating Figures
 
 All plotting scripts assume:
 
@@ -180,7 +180,7 @@ posterior_distribution.png
 
 ---
 
-##  Figure Gallery
+####  Figure Gallery
 
 =======
 | #  | File                           | Insight                                                                        
@@ -191,35 +191,35 @@ posterior_distribution.png
 | 3  | 3.uncertainities.png           | Checks correlation between predicted σ and actual                              
 | 4  | 4.cross\_correlations.png      | Joint distributions (truth, posterior, MAP) for every target pair.             
 
-### 1  Prior vs Posterior (Figure 1)
+##### 1  Prior vs Posterior (Figure 1)
 
 ![Prior vs Posterior](scalar/1.posterior_distrubution.png)
 *Side‑by‑side KDE curves of the population prior (grey dashed), model posterior (blue), MAP estimate (gold), and ground truth (red) for every cluster and target.*
 
 ---
 
-### 2a  Posterior Heat‑maps (Figure 2a)
+##### 2a  Posterior Heat‑maps (Figure 2a)
 
 ![Posterior Heat‑maps](scalar/2.prediction_performance1.png)
 *2‑D heat‑maps of prior bin → posterior bin counts, overlaid with median (solid) and 10th/90th percentile (dashed) lines for each target.*
 
 ---
 
-### 2b  MAP & Error Trends (Figure 2b)
+##### 2b  MAP & Error Trends (Figure 2b)
 
 ![MAP & Error Trends](scalar/2.prediction_performance2.png)
 *Top row: Ground‑truth vs MAP predictions.  Bottom row: Absolute error vs truth (symlog scale) with 16th/84th percentile bands.*
 
 ---
 
-### 3  Uncertainty Calibration (Figure 3)
+##### 3  Uncertainty Calibration (Figure 3)
 
 ![Uncertainty Calibration](scalar/3.uncertainities.png)
 *Scatter of |MAP − truth| versus posterior σ, including Gaussian reference curves and binned 68th/95th percentile error lines.*
 
 ---
 
-### 4  Cross‑correlations (Figure 4)
+##### 4  Cross‑correlations (Figure 4)
 
 ![Cross‑correlations](scalar/4.cross_correlations.png)
 *Staircase grid of pairwise scatter plots showing joint distributions of truth (red), posterior samples (light‑blue), and MAP predictions (mustard) for every target pair.*
