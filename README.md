@@ -21,9 +21,6 @@ This submodule implements the **scalar** pipeline of the Conditional Invertible 
   * [3. Model Architecture](#3-model-architecture)
   * [4. Training](#4-training)
   * [5. Plotting Results](#5-plotting-results)
-* [Configuration](#configuration)
-* [Contributing](#contributing)
-* [License](#license)
 
 ---
 
