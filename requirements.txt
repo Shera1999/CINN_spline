@@ -1,0 +1,25 @@
+# Core scientific libraries
+numpy>=1.22
+pandas>=1.4
+scipy>=1.8
+scikit-learn>=1.1
+
+# Deep learning (adjust torch version to match your CUDA setup if needed)
+torch>=1.12
+torchvision>=0.13
+
+# Invertible neural networks (FrEIA from source)
+git+https://github.com/VLL-HD/FrEIA.git
+
+# Plotting and visualization
+matplotlib>=3.5
+seaborn>=0.11
+
+# Utilities
+pyyaml>=6.0
+joblib>=1.1
+tqdm>=4.64
+
+# Jupyter notebook support
+notebook
+jupyterlab

@@ -1,7 +1,11 @@
 # CINN\_spline: Scalar Submodule
 
-This submodule implements the **scalar** pipeline of the Conditional Invertible Neural Network (cINN) framework for modeling galaxy cluster merger properties. It covers:
+This repository implements two complementary pipelines under the **Conditional Invertible Neural Network (cINN)** framework for modeling galaxy cluster merger properties:
 
+* **scalar/**: Uses tabular observational features (such as mass, radius, ..) as conditioning variables.
+* **representation\_space/**: Uses deep learned representations from mock images as conditioning inputs, optionally enhanced using a **Mixture of Experts (MoE)** model.
+
+----
 1. **Data preprocessing** (`data_filter.py`)
 2. **Data loading** (`data_loader.py`)
 3. **Model definition** (`model.py`)
@@ -17,34 +21,23 @@ This submodule implements the **scalar** pipeline of the Conditional Invertible 
 * [Usage](#usage)
 
   * [1. Data Preprocessing](#1-data-preprocessing)
-  * [2. Creating DataLoaders](#2-creating-dataloaders)
-  * [3. Model Architecture](#3-model-architecture)
-  * [4. Training](#4-training)
-  * [5. Plotting Results](#5-plotting-results)
+  * [2. Model Architecture](#2-model-architecture)
+  * [3. Training](#3-training)
+  * [4. Plotting Results](#4-plotting-results)
+  * [5. Mixture of Experts Extension](#5-mixture-of-experts-extension)
+  * [6. Figure Gallery](#6-figure-gallery)
 
----
 
 ## Installation
 
-1. **Clone the repository**
+```bash
+git clone <repo_url>
+cd CINN_spline
+python3 -m venv cinn_venv
+source cinn_venv/bin/activate
+pip install -r requirements.txt
+```
 
-   ```bash
-   git clone <repo_url>
-   cd CINN_spline/scalar
-   ```
-
-2. **Create & activate a Python environment** (recommended)
-
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-
-3. **Install dependencies**
-
-   ```bash
-   pip install -r requirements.txt
-   ```
 
 *Required libraries include:* `numpy`, `pandas`, `scikit-learn`, `torch`, `FrEIA`, `matplotlib`, `scipy`, `joblib`, `pyyaml`.
 
@@ -78,8 +71,9 @@ scalar/
 
 ## Usage
 
-### 1. Data Preprocessing
+### 1. Scalar Submodule
 
+**Preprocessing:**
 Merge observables & unobservables, drop missing targets, scale features:
 
 ```bash
@@ -97,21 +91,54 @@ python data_filter.py \
   * `meta.csv`: `HaloID, Snapshot`
   * `obs_scaler.pkl`, `tar_scaler.pkl`
 
-### 2. Creating DataLoaders
-
-```python
-from data_loader import get_loaders
-train_loader, val_loader = get_loaders(
-    processed_dir="processed_data",  
-    batch_size=512,
-    val_frac=0.1,
-)
-```
-
 * Splits by **unique** `HaloID` to avoid leakage.
 * Returns PyTorch `DataLoader` with fields `.data` (targets) and `.cond` (observables).
 
-### 3. Model Architecture
+**Training:**
+
+```bash
+python scalar/main.py scalar/params.yaml
+```
+
+**Visualization:**
+Execute each notebook inside `scalar/`:
+
+* `1.posterior_distribution.ipynb`
+* `2.prediction_performance.ipynb`
+* `3.uncertainities.ipynb`
+* `4.cross_correlations.ipynb`
+```
+
+
+### 2. Representation Space Submodule
+
+**Preprocessing:**
+
+```bash
+python representation_space/cluster_data_filter_simple.py \
+  --embeddings embeddings.npy \
+  --filenames filenames.npy \
+  --features_csv cluster_features.csv \
+  --output_dir representation_space/processed_data
+```
+
+**Training Experts:**
+
+```bash
+python representation_space/train_experts.py \
+  --params_path representation_space/params.yaml \
+  --save_dir representation_space/experts/
+```
+
+**Visualizations:**
+Run the standalone scripts or convert to notebooks as needed:
+
+* `1.posterior_distribution.png`
+* `2.prediction_performance1.png`, `2.prediction_performance2.png`
+* `3.uncertainities.png`
+
+
+### Model Architecture
 
 The core of the scalar pipeline is the **cINN** defined in `model.py`. Key components:
 
@@ -134,8 +161,6 @@ In the forward pass: `x → z` with log‐likelihood `log p(z) + log|det J|`. In
 
 *Important hyperparameters* in `params.yaml`: number of blocks (`n_blocks`), coupling type (`affine` or `rational_quadratic`), bins (`num_bins`), hidden sizes, Bayesian flags.
 
-### 4. Training
-
 Use `main.py` to kick off training:
 
 ```bash
@@ -150,14 +175,20 @@ python main.py params.yaml
   3. **Evaluate** on validation set, logging train/val NLL & KL.
   4. **Checkpoint** model weights at intervals into `runs/<timestamp>_<run_name>/`.
 
-### 5. Plotting Results
+#### Mixture of Experts (MoE):
+
+In `representation_space/`, the dataset is clustered (e.g., k-means) and a separate cINN expert is trained per cluster. At inference:
+
+* A datapoint is assigned to its expert (based on nearest cluster center).
+* The assigned expert generates posterior samples.
+
+This improves generalization when conditioning embeddings are heterogeneous.
+
+### Plotting Results
 
 #### Generating Figures
 
 All plotting scripts assume:
-
-* `model.pt` exists in the runs folder and generated after runnig the training. 
-* `processed_data/` contains the pre‑processed CSVs & scalers.
 
 Run any script inside the jupyter notebook files:
 
@@ -165,7 +196,7 @@ Run any script inside the jupyter notebook files:
 1.posterior_distribution.ipynb       # Fig. 1  prior v posterior grid
 2.prediction_performance.ipynb       # Fig. 2a heat‑maps, Fig. 2b truth v MAP
 3.uncertainities.ipynb               # Fig. 3  calibration
-4.cross_correlation.ipynb            # Fig. 4  pairwise correlations
+4.cross_correlation.ipynb            # Fig. 4  pairwise correlations 
 ```
 
 Each script saves a high‑resolution PNG (and commented‑out PDF) in the repo root with intuitive file names:
@@ -180,17 +211,9 @@ posterior_distribution.png
 
 ---
 
-####  Figure Gallery
+##  Figure Gallery
 
-| #  | File                           | Insight                                                                        
-| -- | ------------------------------ | ------------------------------------------------------------------------------ 
-| 1  | 1.posterior\_distribution.png    | Side‑by‑side prior/posterior comparison with MAP + truth per cluster.          
-| 2a | 2.prediction\_performance1.png | Heat‑maps of how posteriors shift relative to prior bins across targets.       
-| 2b | 2.prediction\_performance2.png | MAP accuracy & error distribution as a function of ground‑truth value.         
-| 3  | 3.uncertainities.png           | Checks correlation between predicted σ and actual                              
-| 4  | 4.cross\_correlations.png      | Joint distributions (truth, posterior, MAP) for every target pair.   
-
----
+### Scalar Submodule
 
 ##### 1  Prior vs Posterior (Figure 1)
 
@@ -224,3 +247,25 @@ posterior_distribution.png
 
 ![Cross‑correlations](scalar/4.cross_correlations.png)
 *Staircase grid of pairwise scatter plots showing joint distributions of truth (red), posterior samples (light‑blue), and MAP predictions (mustard) for every target pair.*
+
+### Representation Space Submodule
+
+#### 1. Prior vs Posterior (Figure 1)
+
+![Prior vs Posterior](representation_space/1.posterior_distribution.png)
+*Same as scalar version, applied to embedding-based conditioning.*
+
+#### 2a. Posterior Heatmaps (Figure 2a)
+
+![Posterior Heatmaps](representation_space/2.prediction_performance1.png)
+*Same as scalar but under MoE-based embeddings.*
+
+#### 2b. MAP & Error Trends (Figure 2b)
+
+![MAP and Error Trends](representation_space/2.prediction_performance2.png)
+*Trends under expert-level predictions.*
+
+#### 3. Uncertainty Calibration (Figure 3)
+
+![Uncertainty Calibration](representation_space/3.uncertainities.png)
+*MoE-enhanced prediction uncertainty vs truth comparison.*
