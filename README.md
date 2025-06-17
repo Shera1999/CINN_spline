@@ -46,26 +46,51 @@ pip install -r requirements.txt
 ## Directory Structure
 
 ```text
-scalar/
-├── data_filter.py              # Preprocess raw CSVs into scaled datasets
-├── data_loader.py              # Build PyTorch DataLoaders
-├── model.py                    # Defines VBLinear, Subnet, transformations, CINN
-├── trainer.py                  # Training logic, logging, checkpointing
-├── main.py                     # CLI entry point for training runs
-├── params.yaml                 # Hyperparameter configuration
-├── plot_utils.py               # Common routines for posterior sampling & KDE
-├── 1.posterior_distribution.ipynb  # Notebook generating Figure 1
-├── 1.posterior_distribution.png   # Posterior distribution figure
-├── 2.prediction_performance.ipynb # Notebook for performance evaluation
-├── 2.prediction_performance1.png  # Performance heatmap (prior vs posterior)
-├── 2.prediction_performance2.png  # MAP vs truth & error vs truth plots
-├── 3.uncertainities.ipynb         # Notebook analyzing predictive uncertainties
-├── 3.uncertainities.png           # Uncertainty vs error scatter
-├── 4.cross_correlations.ipynb     # Notebook for cross-correlation analysis
-├── 4.cross_correlations.png        # Cross-correlation heatmap
-├── processed_data/             # Generated: scaled X.csv, Y.csv, meta.csv, scalers
-└── runs/                       # Output directory for checkpoints & logs
+CINN_spline/
+├── scalar/                           # Tabular observables → cINN → merger properties pipeline
+│   ├── data_filter.py               # Preprocess raw observables/unobservables into scaled datasets
+│   ├── data_loader.py               # Load and split data with unique HaloID-based splitting
+│   ├── model.py                     # Defines cINN architecture (VBLinear, coupling layers, splines)
+│   ├── trainer.py                   # Training loop with optimizer, NLL loss, and logging
+│   ├── main.py                      # CLI entry point for launching training runs
+│   ├── params.yaml                  # Configuration of model, training, data parameters
+│   ├── plot_utils.py                # Shared tools for KDE, posterior sampling, and MAP computation
+│   ├── 1.posterior_distribution.ipynb # Notebook for visualizing prior vs posterior comparison
+│   ├── 1.posterior_distribution.png   # Output of notebook: KDE curves for all targets
+│   ├── 2.prediction_performance.ipynb # Notebook for heatmaps, MAP predictions vs truth
+│   ├── 2.prediction_performance1.png  # Heatmap plot: prior bin → posterior bin
+│   ├── 2.prediction_performance2.png  # Scatter plot: MAP vs truth, and error vs truth
+│   ├── 3.uncertainities.ipynb         # Notebook for uncertainty calibration (error vs std)
+│   ├── 3.uncertainities.png           # Scatter of |MAP−truth| vs σ with calibration lines
+│   ├── 4.cross_correlations.ipynb     # Notebook for pairwise posterior correlations
+│   ├── 4.cross_correlations.png       # Staircase scatter plot of MAP/posterior/truth
+│   ├── processed_data/             # Preprocessed scaled CSVs, scalers, metadata
+│   └── runs/                       # Model checkpoints and logs per training run
+│
+├── representation_space/          # CNN embeddings → MoE (expert cINNs) → target prediction
+│   ├── cluster_setup.py            # Applies KMeans clustering on embeddings & prepares labels
+│   ├── train_experts.py            # Trains a separate cINN model for each expert cluster
+│   ├── data_loader.py              # Loads expert-specific subsets based on cluster label
+│   ├── model.py                    # Expert model architecture: cINN with spline couplings
+│   ├── trainer.py                  # Modular expert training logic and checkpointing
+│   ├── plot_utils.py               # Utilities for shared MAP/posterior/std analysis
+│   ├── 1.posterior_distribution.ipynb # Prior vs posterior comparison for expert predictions
+│   ├── 1.posterior_distribution.png   # Figure 1: Expert posterior density per target
+│   ├── 2.prediction_performance.ipynb # MAP and performance visualizations
+│   ├── 2.prediction_performance1.png  # Heatmap (prior vs posterior bins)
+│   ├── 2.prediction_performance2.png  # MAP scatter and error vs ground truth
+│   ├── 3.uncertainities.ipynb         # Posterior std vs |MAP − truth| plots
+│   ├── 3.uncertainities.png           # Uncertainty calibration curve (MoE setup)
+│   └── experts/                    # Folder of expert_id/ subdirs, each with model.pt
+│       └── <expert_id>/           # Trained weights for each expert cINN
+│
+└── README.md                    
 ```
+
+
+---
+
+Here is the improved and corrected **Usage** section for your `README.md`, incorporating your feedback:
 
 ---
 
@@ -77,22 +102,22 @@ scalar/
 Merge observables & unobservables, drop missing targets, scale features:
 
 ```bash
-python data_filter.py \
+python scalar/data_filter.py \
   --obs_csv observables1.csv \
   --unobs_csv unobservables1.csv \
-  --out_dir processed_data
+  --out_dir scalar/processed_data
 ```
 
-* **Input:** `observables1.csv`, `unobservables1.csv` (must share `HaloID, Snapshot`).
-* **Outputs in `processed_data/`:**
+* **Input:** `observables1.csv`, `unobservables1.csv` (must share `HaloID, Snapshot`)
+* **Outputs (in `scalar/processed_data/`):**
 
   * `X.csv`: scaled observables
   * `Y.csv`: scaled targets
   * `meta.csv`: `HaloID, Snapshot`
   * `obs_scaler.pkl`, `tar_scaler.pkl`
 
-* Splits by **unique** `HaloID` to avoid leakage.
-* Returns PyTorch `DataLoader` with fields `.data` (targets) and `.cond` (observables).
+Splits are made by **unique** `HaloID` to avoid data leakage across train/val/test.
+Returns PyTorch `DataLoader` with `.data` (targets) and `.cond` (observables).
 
 **Training:**
 
@@ -100,19 +125,22 @@ python data_filter.py \
 python scalar/main.py scalar/params.yaml
 ```
 
+This runs the standard cINN model **without** the Mixture of Experts (MoE) component.
+
 **Visualization:**
-Execute each notebook inside `scalar/`:
+Run any of the following notebooks inside `scalar/` to generate figures:
 
 * `1.posterior_distribution.ipynb`
 * `2.prediction_performance.ipynb`
 * `3.uncertainities.ipynb`
 * `4.cross_correlations.ipynb`
-```
 
+---
 
 ### 2. Representation Space Submodule
 
 **Preprocessing:**
+To apply the MoE model to a set of **image embeddings**:
 
 ```bash
 python representation_space/cluster_data_filter_simple.py \
@@ -122,7 +150,19 @@ python representation_space/cluster_data_filter_simple.py \
   --output_dir representation_space/processed_data
 ```
 
-**Training Experts:**
+**Setup for Expert Clustering:**
+Before training the experts, you need to cluster the samples:
+
+```bash
+python representation_space/cluster_setup.py \
+  --processed_dir representation_space/processed_data \
+  --params_path representation_space/params.yaml
+```
+
+This generates clustering assignments for the mixture components and updates the `params.yaml` accordingly.
+
+**Training Experts (MoE):**
+This will launch one cINN per expert using the cluster assignments:
 
 ```bash
 python representation_space/train_experts.py \
@@ -130,12 +170,20 @@ python representation_space/train_experts.py \
   --save_dir representation_space/experts/
 ```
 
-**Visualizations:**
-Run the standalone scripts or convert to notebooks as needed:
+🧠 **Note:** `train_experts.py` enables the **Mixture of Experts** (MoE) approach, which has been empirically shown to **significantly improve prediction quality** over the single-network baseline (`main.py`).
 
-* `1.posterior_distribution.png`
-* `2.prediction_performance1.png`, `2.prediction_performance2.png`
-* `3.uncertainities.png`
+**Visualization:**
+Notebooks in `representation_space/` follow the same API as in `scalar/`:
+
+* `1.posterior_distribution.ipynb`
+* `2.prediction_performance.ipynb`
+* `3.uncertainities.ipynb`
+
+Each will automatically load expert checkpoints and produce the corresponding plots.
+
+---
+
+Let me know if you'd like to link the figures side-by-side as a gallery or if you'd like a version with collapsible code blocks for cleaner GitHub rendering.
 
 
 ### Model Architecture
